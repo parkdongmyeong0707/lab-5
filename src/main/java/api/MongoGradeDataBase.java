@@ -1,6 +1,9 @@
 package api;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -65,7 +68,7 @@ public class MongoGradeDataBase implements GradeDataBase {
             }
             else {
                 throw new RuntimeException("Grade could not be found for course: " + course
-                                           + " and username: " + username);
+                        + " and username: " + username);
             }
         }
         catch (IOException | JSONException event) {
@@ -268,6 +271,58 @@ public class MongoGradeDataBase implements GradeDataBase {
         // HINT 1: Look at the formTeam method to get an idea on how to parse the response
         // HINT 2: You may find it useful to just initially print the contents of the JSON
         //         then work on the details of how to parse it.
-        return null;
+        try {
+            response = client.newCall(request).execute();
+            responseBody = new JSONObject(response.body().string());
+
+            if (responseBody.getInt(STATUS_CODE) == SUCCESS_CODE) {
+                // Expecting a "team" object with "name" and "members" (array of strings)
+
+                final JSONObject team = responseBody.getJSONObject("team");
+                final JSONArray membersArray = team.optJSONArray("members");
+                final String[] members;
+                final String name = team.optString("name");
+
+                if(name == null){
+                    final String topName = responseBody.optString("topName");
+                    if (topName != null){
+
+                    }
+                }
+
+                if (membersArray.length() > 0) {
+                    members = new String[membersArray.length()];
+                    for (int i = 0; i < membersArray.length(); i++) {
+                        members[i] = membersArray.optString(i, "");
+                    }
+                } else {
+                    // Fallback if API returns empty/missing members list
+                    Object m  = team.opt("members");
+                    if (m instanceof JSONObject){
+                        JSONObject membersObj = (JSONObject)m;
+                        List<String> list = new ArrayList<String>();
+
+                        for (Iterator<String> it = membersObj.keys(); it.hasNext();){
+                            String k  =  it.next();
+                            list.add(membersObj.getString(k));
+
+                        }
+                        members = list.toArray(new String[list.size()]);
+                    } else{
+                        members = new String[0];
+                    }
+                }
+
+                return Team.builder()
+                        .name(team.optString(NAME, " "))
+                        .members(members)
+                        .build();
+            } else {
+                // Non-200: surface server-provided message if available
+                throw new RuntimeException(responseBody.optString(MESSAGE, "Failed to get team info."));
+            }
+        } catch (IOException | JSONException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
